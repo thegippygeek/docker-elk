@@ -38,7 +38,7 @@ services:
       MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
       BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
     networks:
-      - elk
+      - default
     depends_on:
       - elasticsearch
 
@@ -64,7 +64,7 @@ services:
       # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
       discovery.type: single-node
     networks:
-      - elk
+      - default
     restart: unless-stopped
 
   logstash:
@@ -77,14 +77,18 @@ services:
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
     ports:
       - 5044:5044
-      - 50000:50000/tcp
-      - 50000:50000/udp
+      # - 50000:50000/tcp
+      # - 50000:50000/udp
       - 9600:9600
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: ap-southeast-2
+      
     networks:
-      - elk
+      - default
     depends_on:
       - elasticsearch
     restart: unless-stopped
@@ -101,13 +105,45 @@ services:
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
     networks:
-      - elk
+      - default
     depends_on:
       - elasticsearch
     restart: unless-stopped
 
+  mb_docker:
+    container_name: mb_docker
+    image: elastic/metricbeat:8.6.2
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      output.elasticsearch.hosts: "elasticsearch:9200"
+    networks:
+      - default
+    depends_on:
+      - elasticsearch
+    user: root
+    
+
+  localstack:
+    container_name: "localstack"
+    image: localstack/localstack
+    # pull_policy: always
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # external services port range
+    environment:
+      - DEBUG=0
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - TEST_AWS_ACCOUNT_ID=000000000000
+      - AWS_DEFAULT_REGION=ap-southeast-2
+      - PARITY_AWS_ACCESS_KEY_ID=1
+     
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
 networks:
-  elk:
+  default:
+    name: elastic_default
     driver: bridge
 
 volumes:
